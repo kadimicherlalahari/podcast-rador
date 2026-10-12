@@ -4,6 +4,7 @@ import { connection } from "next/server";
 import { ChevronRight, ClipboardList, DownloadCloud, FileText, Lock, Sparkles } from "lucide-react";
 import { db } from "@/lib/db";
 import { ingestAll } from "@/lib/ingest";
+import { extractBatch, requeueFailed } from "@/lib/extract";
 import { SubmitButton } from "@/components/client";
 import { EmptyState, PageHeader, PageSkeleton, Panel, Pill, ShowName, ago, fmtDateTime, n } from "@/components/ui";
 
@@ -17,12 +18,25 @@ async function runIngest() {
   revalidatePath("/");
 }
 
+async function runExtract() {
+  "use server";
+  await extractBatch({ deadlineMs: 240_000 });
+  revalidatePath("/admin/runs");
+  revalidatePath("/");
+}
+
+async function retryFailed() {
+  "use server";
+  await requeueFailed();
+  await runExtract();
+}
+
 export default function RunsPage() {
   return (
     <>
       <PageHeader
         title="Runs"
-        description="A scheduled job runs every day at 3:30 am IST: it collects new episodes, extracts a batch, and writes the brief on Mondays. You can also run each stage yourself."
+        description="Run each stage yourself here. A daily job at 3:30 am IST that collects, extracts a batch and writes the brief on Mondays is switched on in Phase 5."
       />
 
       <Panel className="mt-8">
@@ -33,12 +47,30 @@ export default function RunsPage() {
               <SubmitButton pending="Collecting… keep this tab open">Run now</SubmitButton>
             </form>
           </Stage>
-          <Stage icon={Sparkles} title="Extract with AI" body="Pulls guests, topics and sponsor mentions out of waiting episodes." locked="Phase 3" />
+          <Stage icon={Sparkles} title="Extract with AI"
+            body="Gemini pulls guests, topics and sponsor mentions out of up to 15 waiting episodes. Anything it can't quote from the episode text is dropped.">
+            <div className="flex flex-wrap gap-2">
+              <form action={runExtract}>
+                <SubmitButton pending="Extracting… keep this tab open">Run now</SubmitButton>
+              </form>
+              <Suspense>
+                <RetryFailed />
+              </Suspense>
+            </div>
+          </Stage>
           <Stage icon={FileText} title="Write the brief" body="Scores the week and writes Monday's brief." locked="Phase 5" />
         </ul>
       </Panel>
 
-      <h2 className="mt-10 text-base font-semibold text-ink">History</h2>
+      <h2 className="mt-10 text-base font-semibold text-ink">Extraction history</h2>
+      <p className="mt-0.5 text-sm text-ink-3">Dropped items are ones Gemini returned but couldn&apos;t back with a quote from the episode text, or that named a host as a guest.</p>
+      <div className="mt-3">
+        <Suspense fallback={<PageSkeleton />}>
+          <ExtractHistory />
+        </Suspense>
+      </div>
+
+      <h2 className="mt-10 text-base font-semibold text-ink">Collection history</h2>
       <p className="mt-0.5 text-sm text-ink-3">The newest run is expanded. Merged means the same episode was found on both YouTube and RSS.</p>
       <div className="mt-3">
         <Suspense fallback={<PageSkeleton />}>
@@ -61,6 +93,71 @@ function Stage({ icon: Icon, title, body, locked, children }: {
       </div>
       {locked ? <Pill><Lock className="size-3" /> Arrives in {locked}</Pill> : children}
     </li>
+  );
+}
+
+async function RetryFailed() {
+  await connection();
+  const failed = Number((await db().execute("select count(*) c from episodes where status = 'failed'")).rows[0].c);
+  if (!failed) return null;
+  return (
+    <form action={retryFailed}>
+      <SubmitButton variant="secondary" pending="Retrying…">Retry {failed} failed</SubmitButton>
+    </form>
+  );
+}
+
+const STOP_LABEL: Record<string, string> = {
+  done: "Queue empty", batch_limit: "Batch done", call_cap: "Hit Gemini call cap", deadline: "Hit time limit", rate_limited: "Rate-limited by Gemini",
+};
+
+async function ExtractHistory() {
+  await connection();
+  const { rows } = await db().execute("select * from extract_runs order by started_at desc limit 20");
+  if (!rows.length) {
+    return <EmptyState icon={Sparkles} title="No extraction runs yet">Use Run now on Extract with AI to process waiting episodes.</EmptyState>;
+  }
+  return (
+    <Panel className="overflow-x-auto">
+      <table className="num w-full min-w-[640px] text-sm">
+        <thead>
+          <tr className="border-b border-line text-left text-xs text-ink-3">
+            <th className="px-5 py-2 font-medium">Started</th>
+            <th className="py-2 text-right font-medium">Extracted</th>
+            <th className="py-2 text-right font-medium">Guests</th>
+            <th className="py-2 text-right font-medium">Paid brands</th>
+            <th className="py-2 text-right font-medium">Dropped</th>
+            <th className="py-2 text-right font-medium">Gemini calls</th>
+            <th className="px-5 py-2 text-right font-medium">Result</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-line">
+          {rows.map((r) => {
+            const kept = JSON.parse(String(r.kept)) as Record<string, number>;
+            const dropped = Object.values(JSON.parse(String(r.dropped)) as Record<string, number>).reduce((a, b) => a + b, 0);
+            const errors = JSON.parse(String(r.errors)) as string[];
+            const failed = Number(r.failed);
+            return (
+              <tr key={String(r.id)} className="align-top text-ink-2">
+                <td className="px-5 py-2.5">
+                  <span className="block text-ink">{fmtDateTime(String(r.started_at))}</span>
+                  <span className="block text-xs text-ink-3">{ago(String(r.started_at))}</span>
+                  {errors.length > 0 && <span className="mt-1 block max-w-md break-words text-xs text-bad">{errors[0]}{errors.length > 1 ? ` (+${errors.length - 1} more)` : ""}</span>}
+                </td>
+                <td className="py-2.5 text-right font-medium text-ink">{n(r.extracted)}{failed ? <span className="text-bad"> · {failed} failed</span> : null}</td>
+                <td className="py-2.5 text-right">{n(kept.guests)}</td>
+                <td className="py-2.5 text-right">{n(kept.paid_brands)}</td>
+                <td className="py-2.5 text-right">{n(dropped)}</td>
+                <td className="py-2.5 text-right">{n(r.gemini_calls)}</td>
+                <td className="px-5 py-2.5 text-right">
+                  <Pill tone={r.stop_reason === "rate_limited" || failed ? "warn" : "good"} dot>{STOP_LABEL[String(r.stop_reason)] ?? String(r.stop_reason)}</Pill>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </Panel>
   );
 }
 

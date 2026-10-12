@@ -13,7 +13,9 @@
     "typecheck": "tsc --noEmit",
     "db:migrate": "tsx scripts/migrate.ts",
     "backfill": "tsx scripts/backfill.ts",
-    "report:ingest": "tsx scripts/report-ingest.ts"
+    "extract": "tsx scripts/backfill.ts --extract-only",
+    "report:ingest": "tsx scripts/report-ingest.ts",
+    "report:extract": "tsx scripts/report-extract.ts"
   },
   "dependencies": {
     "@google/genai": "^2.28.0",

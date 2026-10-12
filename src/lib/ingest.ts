@@ -2,6 +2,7 @@ import Parser from "rss-parser";
 import { db } from "./db-core";
 import { classifyKind, type Kind } from "./classify";
 import { isSameEpisode } from "./match";
+import { decodeEntities } from "./evidence";
 import { parseClockDuration, parseIsoDuration } from "./duration";
 import { getVideos, listUploads } from "./youtube";
 
@@ -50,7 +51,7 @@ export async function loadActiveShows(): Promise<ShowRow[]> {
   }));
 }
 
-const stripHtml = (s: string) => s.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+\n/g, "\n").trim();
+const stripHtml = (s: string) => decodeEntities(s.replace(/<[^>]+>/g, " ")).replace(/\u00A0/g, " ").replace(/\s+\n/g, "\n").trim();
 
 function mergeText(a: string, b: string): string {
   if (!b || a === b || a.includes(b)) return a;
@@ -79,7 +80,7 @@ async function fetchYoutube(playlistId: string, maxPages: number, stats: ShowSta
   return videos.map((v): Item => {
     const durationSeconds = parseIsoDuration(v.duration);
     return {
-      source: "youtube", ytId: v.id, title: v.title, description: v.description, publishedAt: v.publishedAt,
+      source: "youtube", ytId: v.id, title: decodeEntities(v.title), description: decodeEntities(v.description), publishedAt: v.publishedAt,
       durationSeconds, url: `https://www.youtube.com/watch?v=${v.id}`,
       kind: classifyKind(
         { title: v.title, description: v.description, durationSeconds, liveBroadcastContent: v.liveBroadcastContent },

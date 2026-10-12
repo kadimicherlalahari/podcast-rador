@@ -67,8 +67,10 @@ async function Overview() {
     <>No brief yet. <b className="font-medium text-ink">{n(pending)} full episodes</b> from {n(t.shows_with_full)} shows
       are collected and waiting for AI extraction, which is the next stage.</>
   ) : (
-    <>No brief yet. {n(extracted)} episodes are extracted; the brief is written once scoring is in place.</>
+    <>No brief yet. <b className="font-medium text-ink">{n(extracted)} episodes</b> are extracted
+      {pending ? <>, {n(pending)} still waiting</> : null}. Scoring and ranking is the next stage.</>
   );
+  const nextStage = brief ? null : extracted ? "Needs scoring" : "Needs extraction";
 
   type Step = { label: string; detail: string; state: "done" | "waiting" | "todo" };
   const steps: Step[] = [
@@ -80,7 +82,7 @@ async function Overview() {
     {
       label: "Extract guests, topics, sponsors",
       detail: extracted ? `${n(extracted)} done · ${n(pending)} waiting` : `${n(pending)} episodes waiting`,
-      state: pending && !extracted ? "waiting" : extracted ? "done" : "todo",
+      state: pending ? "waiting" : extracted ? "done" : "todo",
     },
     { label: "Score and rank", detail: "Media rounds, topic momentum, sponsors", state: "todo" },
     { label: "Write the brief", detail: "Every Monday morning", state: brief ? "done" : "todo" },
@@ -134,7 +136,7 @@ async function Overview() {
                   <p className="mt-0.5 text-sm leading-relaxed text-ink-2">{a}</p>
                 </div>
                 <span className="hidden sm:block">
-                  {brief ? <Pill tone="good">Ready</Pill> : <Pill>Needs extraction</Pill>}
+                  {brief ? <Pill tone="good">Ready</Pill> : <Pill>{nextStage}</Pill>}
                 </span>
               </li>
             ))}

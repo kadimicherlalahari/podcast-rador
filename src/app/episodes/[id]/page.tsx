@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, ChevronRight, ExternalLink, Headphones, Sparkles } from "lucide-react";
 import { db } from "@/lib/db";
 import {
-  KIND_LABEL, PageSkeleton, Panel, ShowName, StatusPill, btn, duration, fmtDate, fmtDateTime,
+  KIND_LABEL, PageSkeleton, Panel, Pill, ShowName, StatusPill, btn, duration, fmtDate, fmtDateTime,
 } from "@/components/ui";
 
 export default function EpisodePage({ params }: { params: Promise<{ id: string }> }) {
@@ -42,8 +42,15 @@ async function Episode({ params }: { params: Promise<{ id: string }> }) {
       : status === "failed"
         ? `Extraction failed: ${String(e.extraction_error ?? "unknown error")}`
         : status === "extracted"
-          ? "Guests, topics and sponsor mentions were extracted from this episode."
+          ? `Extracted ${e.extracted_at ? fmtDateTime(String(e.extracted_at)) : ""}. Each item below quotes the episode text it came from.`
           : "Next, Gemini will read the title and description below and pull out guests, topics and sponsor mentions. Every item has to quote this text, or it's dropped.";
+
+  const [guests, brands, topics] = status === "extracted" ? await Promise.all([
+    db().execute({ sql: "select g.canonical_name name, g.company, g.role, a.evidence from appearances a join guests g on g.id = a.guest_id where a.episode_id = ? order by g.canonical_name", args: [id] }),
+    db().execute({ sql: "select b.canonical_name name, m.mention_type, m.evidence from brand_mentions m join brands b on b.id = m.brand_id where m.episode_id = ? order by m.mention_type = 'organic', b.canonical_name", args: [id] }),
+    db().execute({ sql: "select t.label from episode_topics et join topics t on t.id = et.topic_id where et.episode_id = ? order by t.label", args: [id] }),
+  ]).then((r) => r.map((x) => x.rows)) : [[], [], []];
+  const dropped = (JSON.parse(String(e.extraction_stats ?? "{}")).dropped ?? []) as { type: string; name: string; evidence?: string; reason: string }[];
 
   const ids: [string, unknown][] = [
     ["YouTube video", e.youtube_video_id], ["RSS guid", e.rss_guid], ["Spotify episode", e.spotify_episode_id],
@@ -88,6 +95,38 @@ async function Episode({ params }: { params: Promise<{ id: string }> }) {
         </div>
       </Panel>
 
+      {status === "extracted" && (
+        <section className="mt-6 grid gap-4 md:grid-cols-2">
+          <Found title="Guests" empty="No guests found in the text.">
+            {guests.map((g) => (
+              <Item key={String(g.name)} evidence={String(g.evidence)}>
+                <span className="font-medium text-ink">{String(g.name)}</span>
+                {(g.role || g.company) && <span className="text-ink-3"> · {[g.role, g.company].filter(Boolean).join(", ")}</span>}
+              </Item>
+            ))}
+          </Found>
+          <Found title="Brands" empty="No brands mentioned.">
+            {brands.map((b) => (
+              <Item key={`${b.name}-${b.mention_type}`} evidence={String(b.evidence)}>
+                <span className="font-medium text-ink">{String(b.name)}</span>{" "}
+                {b.mention_type === "organic" ? <Pill>Mentioned</Pill> : <Pill tone="accent">{b.mention_type === "paid_read" ? "Ad read" : "Sponsor"}</Pill>}
+              </Item>
+            ))}
+          </Found>
+          <Found title="Topics" empty="No topics tagged.">
+            {topics.length > 0 && <li className="flex flex-wrap gap-1.5 px-4 py-3">{topics.map((t) => <Pill key={String(t.label)}>{String(t.label)}</Pill>)}</li>}
+          </Found>
+          <Found title="Dropped by the evidence check" empty="Nothing dropped. Every item quoted the text.">
+            {dropped.filter((d) => d.type !== "topic").map((d, i) => (
+              <Item key={i} evidence={d.evidence}>
+                <span className="font-medium text-ink-2 line-through decoration-ink-3">{d.name || "(blank)"}</span>{" "}
+                <span className="text-xs text-ink-3">{d.type} · {d.reason === "host" ? "is a host" : d.reason === "evidence" ? "quote not in text" : "empty"}</span>
+              </Item>
+            ))}
+          </Found>
+        </section>
+      )}
+
       <section className="mt-10">
         <h2 className="text-base font-semibold text-ink">Description</h2>
         <p className="mt-0.5 text-sm text-ink-3">Text from every source, merged. Extraction reads only this.</p>
@@ -110,5 +149,26 @@ async function Episode({ params }: { params: Promise<{ id: string }> }) {
         </dl>
       </details>
     </article>
+  );
+}
+
+function Found({ title, empty, children }: { title: string; empty: string; children: React.ReactNode }) {
+  const items = (Array.isArray(children) ? children : [children]).flat().filter(Boolean);
+  return (
+    <Panel>
+      <h3 className="border-b border-line px-4 py-2.5 text-sm font-semibold text-ink">{title}</h3>
+      <ul className="divide-y divide-line">
+        {items.length ? items : <li className="px-4 py-3 text-sm text-ink-3">{empty}</li>}
+      </ul>
+    </Panel>
+  );
+}
+
+function Item({ evidence, children }: { evidence?: string; children: React.ReactNode }) {
+  return (
+    <li className="px-4 py-3 text-sm">
+      <p>{children}</p>
+      {evidence && <p className="mt-1 break-words text-xs italic text-ink-3">&ldquo;{evidence}&rdquo;</p>}
+    </li>
   );
 }
