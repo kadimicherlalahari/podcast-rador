@@ -52,6 +52,8 @@ export type RawExtraction = {
   guests?: { name?: string; company?: string; role?: string; evidence?: string }[];
   topics?: string[];
   brands?: { name?: string; mention_type?: string; evidence?: string }[];
+  business_related?: boolean;
+  business_reason?: string;
 };
 export type Guest = { name: string; key: string; company: string | null; role: string | null; evidence: string };
 export type Brand = { name: string; key: string; mention_type: MentionType; evidence: string };

@@ -5,16 +5,17 @@ import { ChevronRight } from "lucide-react";
 const TZ = "Asia/Kolkata";
 
 export const btn = {
+  // YouTube's pill buttons: red for the one primary action on a page, grey tonal for everything else.
   primary:
-    "inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-accent-ink shadow-[0_1px_2px_rgb(0_0_0/0.12)] transition-[filter,opacity] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60",
+    "inline-flex h-9 items-center justify-center gap-2 rounded-full bg-accent px-4 text-sm font-medium text-accent-ink transition-[filter,opacity] hover:brightness-95 active:brightness-90 disabled:cursor-not-allowed disabled:opacity-60",
   secondary:
-    "inline-flex items-center justify-center gap-2 rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60",
+    "inline-flex h-9 items-center justify-center gap-2 rounded-full bg-surface-2 px-4 text-sm font-medium text-ink transition-colors hover:bg-line-strong disabled:cursor-not-allowed disabled:opacity-60",
   ghost:
-    "inline-flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink",
+    "inline-flex h-8 items-center justify-center gap-1.5 rounded-full px-3 text-sm font-medium text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink",
 };
 
 export const input =
-  "rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none";
+  "h-10 rounded-full border border-line-strong bg-surface px-4 text-sm text-ink placeholder:text-ink-3 transition-colors focus:border-info focus:outline-none";
 
 export function PageHeader({ title, description, actions }: {
   title: string; description?: React.ReactNode; actions?: React.ReactNode;
@@ -22,8 +23,8 @@ export function PageHeader({ title, description, actions }: {
   return (
     <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div className="max-w-2xl">
-        <h1 className="text-[1.65rem] font-semibold tracking-[-0.02em] text-ink">{title}</h1>
-        {description && <p className="mt-1.5 text-[0.95rem] leading-relaxed text-ink-2">{description}</p>}
+        <h1 className="text-2xl font-bold tracking-[-0.015em] text-ink">{title}</h1>
+        {description && <p className="mt-1.5 text-[0.95rem] leading-relaxed text-ink-3">{description}</p>}
       </div>
       {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
     </header>
@@ -37,7 +38,7 @@ export function Section({ title, description, action, children, className = "" }
     <section className={`mt-10 ${className}`}>
       <div className="mb-3 flex items-end justify-between gap-4">
         <div>
-          <h2 className="text-base font-semibold text-ink">{title}</h2>
+          <h2 className="text-lg font-bold tracking-[-0.01em] text-ink">{title}</h2>
           {description && <p className="mt-0.5 text-sm text-ink-3">{description}</p>}
         </div>
         {action}
@@ -49,15 +50,17 @@ export function Section({ title, description, action, children, className = "" }
 
 export function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-xl border border-line bg-surface shadow-[0_1px_2px_rgb(16_24_40/0.04)] ${className}`}>
+    <div className={`rounded-xl border border-line bg-surface shadow-[var(--shadow)] ${className}`}>
       {children}
     </div>
   );
 }
 
-type Tone = "neutral" | "accent" | "good" | "warn" | "bad";
+type Tone = "neutral" | "accent" | "good" | "warn" | "bad" | "info" | "violet";
 const toneClass: Record<Tone, string> = {
   neutral: "bg-surface-2 text-ink-2",
+  info: "bg-info-soft text-info",
+  violet: "bg-violet-soft text-violet",
   accent: "bg-accent-soft text-accent-soft-ink",
   good: "bg-good-soft text-good",
   warn: "bg-warn-soft text-warn",
@@ -94,12 +97,12 @@ export function EmptyState({ icon: Icon, title, children, action }: {
   icon: LucideIcon; title: string; children?: React.ReactNode; action?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed border-line-strong bg-surface/60 px-6 py-8">
+    <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed border-line-strong bg-surface px-6 py-8">
       <span className="grid size-10 place-items-center rounded-lg bg-accent-soft text-accent-soft-ink">
         <Icon className="size-5" strokeWidth={1.75} />
       </span>
       <div className="max-w-xl">
-        <p className="font-semibold text-ink">{title}</p>
+        <p className="font-bold text-ink">{title}</p>
         {children && <div className="mt-1 text-sm leading-relaxed text-ink-2">{children}</div>}
       </div>
       {action}
@@ -109,7 +112,7 @@ export function EmptyState({ icon: Icon, title, children, action }: {
 
 export function TextLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <Link href={href} className="inline-flex items-center gap-0.5 text-sm font-medium text-accent hover:underline">
+    <Link href={href} className="inline-flex items-center gap-0.5 text-sm font-medium text-info hover:underline">
       {children}
       <ChevronRight className="size-3.5" />
     </Link>
@@ -180,19 +183,6 @@ export function StatusPill({ status }: { status: string }) {
     case "skipped": return <Pill>Skipped</Pill>;
     default: return <Pill>{status}</Pill>;
   }
-}
-
-/** Next Monday ~03:30 IST, when the daily job (22:00 UTC Sunday) builds the brief. */
-export function nextBriefLabel(): string {
-  const now = new Date();
-  const ist = new Date(now.toLocaleString("en-US", { timeZone: TZ }));
-  const day = ist.getDay(); // 0 Sun .. 1 Mon
-  let add = (8 - day) % 7;
-  if (add === 0 && (ist.getHours() > 3 || (ist.getHours() === 3 && ist.getMinutes() >= 30))) add = 7;
-  const target = new Date(ist);
-  target.setDate(ist.getDate() + add);
-  const label = target.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
-  return add === 0 ? "Today, 3:30 am IST" : `${label}, 3:30 am IST`;
 }
 
 /** Monday (IST) of the current week, as a display label. */

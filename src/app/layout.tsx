@@ -1,61 +1,85 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Roboto } from "next/font/google";
 import Link from "next/link";
+import { Search } from "lucide-react";
 import { Nav } from "@/components/nav";
-import { NextBrief } from "@/components/next-brief";
+import { ThemeToggle } from "@/components/theme-toggle";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const roboto = Roboto({
+  variable: "--font-roboto",
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  weight: ["400", "500", "700"],
 });
 
 export const metadata: Metadata = {
   title: { default: "Podcast Radar", template: "%s · Podcast Radar" },
-  description: "Weekly intelligence on who to book, what to cover, and who to pitch, from 10 Indian founder podcasts.",
+  description: "Weekly intelligence on who to book, what to cover, and who to pitch, from the founder podcasts you follow.",
 };
+
+// Runs before paint so a saved dark preference never flashes light. Light is the default.
+const THEME_SCRIPT = `try{if(localStorage.getItem("theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}`;
 
 function Mark() {
   return (
-    <Link href="/" className="flex items-center gap-2.5">
-      <svg viewBox="0 0 32 32" className="size-8" aria-hidden>
-        <rect width="32" height="32" rx="8" className="fill-ink" />
-        <circle cx="16" cy="16" r="9.5" fill="none" strokeWidth="1.5" className="stroke-bg" opacity=".35" />
-        <circle cx="16" cy="16" r="5" fill="none" strokeWidth="1.5" className="stroke-bg" opacity=".6" />
-        <path d="M16 16 L23.5 9.5" strokeWidth="2" strokeLinecap="round" className="stroke-bg" />
-        <circle cx="21.5" cy="20" r="1.8" className="fill-accent" />
+    <Link href="/" className="flex shrink-0 items-center gap-2" aria-label="Podcast Radar home">
+      <svg viewBox="0 0 28 20" className="h-5 w-7" aria-hidden>
+        <rect width="28" height="20" rx="5.5" className="fill-accent" />
+        <path d="M11.2 6.1v7.8l6.6-3.9z" fill="#fff" />
       </svg>
-      <span className="leading-tight">
-        <span className="block text-[0.95rem] font-semibold tracking-[-0.01em] text-ink">Podcast Radar</span>
-        <span className="block text-xs text-ink-3">Founder podcast intel</span>
-      </span>
+      <span className="text-base font-bold tracking-[-0.02em] text-ink">Podcast Radar</span>
     </Link>
+  );
+}
+
+function SearchBar({ className = "" }: { className?: string }) {
+  return (
+    <form action="/search" role="search" className={className}>
+      <label className="flex h-10 items-center rounded-full border border-line-strong bg-surface pl-4 pr-1.5 transition-colors focus-within:border-info">
+        <span className="sr-only">Search guests, topics, brands and episodes</span>
+        <input name="q" type="search" autoComplete="off" placeholder="Search guests, topics, brands, episodes…"
+          className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none" />
+        <button type="submit" aria-label="Search" className="grid size-8 place-items-center rounded-full text-ink-2 transition-colors hover:bg-surface-2">
+          <Search className="size-[18px]" strokeWidth={1.75} />
+        </button>
+      </label>
+    </form>
   );
 }
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+    <html lang="en" className={`${roboto.variable} h-full antialiased`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body className="min-h-full">
-        <div className="md:grid md:min-h-screen md:grid-cols-[236px_1fr]">
-          <aside className="hidden border-r border-line bg-surface-2 md:sticky md:top-0 md:flex md:h-screen md:flex-col md:px-3 md:py-5">
-            <div className="px-2"><Mark /></div>
-            <nav className="mt-8 flex-1" aria-label="Main"><Nav variant="side" /></nav>
-            <NextBrief />
+        <header className="sticky top-0 z-20 border-b border-line bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/85">
+          <div className="flex h-14 items-center gap-4 px-4 md:px-5">
+            <Mark />
+            <SearchBar className="mx-auto hidden w-full max-w-[560px] md:block" />
+            <div className="ml-auto flex items-center gap-1.5 md:ml-0">
+              <Link href="/search" aria-label="Search" className="grid size-9 place-items-center rounded-full text-ink-2 hover:bg-surface-2 md:hidden">
+                <Search className="size-5" strokeWidth={1.75} />
+              </Link>
+              <ThemeToggle />
+              <span className="ml-1 flex items-center gap-2">
+                <span className="grid size-8 place-items-center rounded-full bg-violet-soft text-sm font-medium text-violet" aria-hidden>A</span>
+                <span className="hidden text-sm font-medium text-ink lg:block">Aditya</span>
+              </span>
+            </div>
+          </div>
+          <nav className="flex gap-2 overflow-x-auto px-4 pb-2.5 [scrollbar-width:none] md:hidden" aria-label="Main"><Nav variant="top" /></nav>
+        </header>
+
+        <div className="md:grid md:grid-cols-[72px_1fr] 2xl:grid-cols-[232px_1fr]">
+          <aside className="hidden border-r border-line bg-surface md:sticky md:top-14 md:flex md:h-[calc(100vh-3.5rem)] md:flex-col md:overflow-y-auto md:px-1 md:py-2 2xl:px-3 2xl:py-3">
+            <nav aria-label="Main" className="flex-1"><Nav variant="side" /></nav>
+            <p className="hidden px-3 pb-2 pt-6 text-xs leading-relaxed text-ink-3 2xl:block">Every number comes from real episodes on your channels.</p>
           </aside>
 
-          <header className="sticky top-0 z-10 border-b border-line bg-surface-2/95 backdrop-blur md:hidden">
-            <div className="px-4 pt-3"><Mark /></div>
-            <nav className="flex gap-1 overflow-x-auto px-3 py-2.5" aria-label="Main"><Nav variant="top" /></nav>
-          </header>
-
-          <main className="min-w-0 px-4 pb-20 pt-6 sm:px-8 md:pt-10 lg:px-12">
-            <div className="mx-auto max-w-[1080px]">{children}</div>
+          <main className="min-w-0 px-4 pb-20 pt-6 sm:px-6 lg:px-8">
+            <div className="mx-auto max-w-[1440px]">{children}</div>
           </main>
         </div>
       </body>

@@ -6,8 +6,10 @@ import { db } from "@/lib/db";
 import { ingestAll } from "@/lib/ingest";
 import { extractBatch, requeueFailed } from "@/lib/extract";
 import { resolveEntities } from "@/lib/resolve";
+import { runInsights } from "@/lib/insights";
 import Link from "next/link";
-import { SubmitButton } from "@/components/client";
+import { ActionButton, SubmitButton } from "@/components/client";
+import { writeAndSendBrief } from "@/app/research-actions";
 import { EmptyState, btn, PageHeader, PageSkeleton, Panel, Pill, ShowName, ago, fmtDateTime, n } from "@/components/ui";
 
 export const maxDuration = 300;
@@ -30,6 +32,14 @@ async function runExtract() {
 async function runScore() {
   "use server";
   await resolveEntities({ deadlineMs: 240_000 });
+  revalidatePath("/admin/runs");
+  revalidatePath("/rankings");
+  revalidatePath("/");
+}
+
+async function runResearch() {
+  "use server";
+  await runInsights({ deadlineMs: 240_000 });
   revalidatePath("/admin/runs");
   revalidatePath("/rankings");
   revalidatePath("/");
@@ -77,11 +87,23 @@ export default function RunsPage() {
               <Link href="/rankings" className={btn.secondary}>View rankings</Link>
             </div>
           </Stage>
-          <Stage icon={FileText} title="Write the brief" body="Scores the week and writes Monday's brief." locked="Phase 5" />
+          <Stage icon={Sparkles} title="Stats and research"
+            body="Fetches YouTube views, likes and top comments, then has Gemini research the top 10 guests, watch the top episodes, and write briefs for the top 6 topics. Fresh results are reused, so reruns are cheap.">
+            <form action={runResearch}>
+              <SubmitButton pending="Researching… keep this tab open">Run now</SubmitButton>
+            </form>
+          </Stage>
+          <Stage icon={FileText} title="Write and email the brief"
+            body="Gemini writes the week's summary and a draft email for each top guest and brand, from the rankings and research. Emailed to you only; nothing goes to guests or brands.">
+            <div className="flex flex-wrap gap-2">
+              <ActionButton action={writeAndSendBrief} fields={{}} label="Run now" pending="Writing and sending… about a minute" />
+              <Link href="/pipeline" className={btn.secondary}>View drafts</Link>
+            </div>
+          </Stage>
         </ul>
       </Panel>
 
-      <h2 className="mt-10 text-base font-semibold text-ink">Extraction history</h2>
+      <h2 className="mt-10 text-base font-bold text-ink">Extraction history</h2>
       <p className="mt-0.5 text-sm text-ink-3">Dropped items are ones Gemini returned but couldn&apos;t back with a quote from the episode text, or that named a host as a guest.</p>
       <div className="mt-3">
         <Suspense fallback={<PageSkeleton />}>
@@ -89,7 +111,7 @@ export default function RunsPage() {
         </Suspense>
       </div>
 
-      <h2 className="mt-10 text-base font-semibold text-ink">Collection history</h2>
+      <h2 className="mt-10 text-base font-bold text-ink">Collection history</h2>
       <p className="mt-0.5 text-sm text-ink-3">The newest run is expanded. Merged means the same episode was found on both YouTube and RSS.</p>
       <div className="mt-3">
         <Suspense fallback={<PageSkeleton />}>
@@ -105,7 +127,7 @@ function Stage({ icon: Icon, title, body, locked, children }: {
 }) {
   return (
     <li className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center">
-      <Icon className={`size-5 shrink-0 ${locked ? "text-ink-3" : "text-accent"}`} strokeWidth={1.75} />
+      <Icon className={`size-5 shrink-0 ${locked ? "text-ink-3" : "text-info"}`} strokeWidth={1.75} />
       <div className="flex-1">
         <p className={`font-medium ${locked ? "text-ink-2" : "text-ink"}`}>{title}</p>
         <p className="mt-0.5 text-sm text-ink-3">{body}</p>
@@ -206,7 +228,7 @@ async function History() {
                 <span className="block text-xs text-ink-3">{ago(String(r.started_at))}{secs !== null ? ` · took ${secs}s` : ""}</span>
               </span>
               <span className="num flex-1 text-sm text-ink-2">
-                <b className="font-semibold text-ink">{n(inserted)}</b> new · {n(merged)} merged
+                <b className="font-bold text-ink">{n(inserted)}</b> new · {n(merged)} merged
               </span>
               {!r.finished_at ? <Pill tone="warn" dot>Didn&apos;t finish</Pill>
                 : errors.length ? <Pill tone="bad" dot>{errors.length} {errors.length === 1 ? "error" : "errors"}</Pill>

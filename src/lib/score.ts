@@ -18,7 +18,8 @@ export type Scores = {
 const DAY = 86_400_000;
 const iso = (ms: number) => new Date(ms).toISOString();
 // Only full, extracted episodes count; clips and trailers never inflate a ranking.
-const COUNTED = "e.kind = 'full' and e.status = 'extracted'";
+// Removed channels keep their history but drop out of every ranking; so do non-business episodes.
+const COUNTED = "e.kind = 'full' and e.status = 'extracted' and coalesce(e.business_related, 1) = 1 and e.show_id in (select id from shows where active = 1)";
 // Ingest sometimes keeps the YouTube and RSS copies of one episode as two rows (different titles, same day),
 // so appearances and placements count one per show per day.
 const SHOW_DAY = "(e.show_id || substr(e.published_at, 1, 10))";

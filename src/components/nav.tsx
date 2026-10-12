@@ -1,83 +1,76 @@
 "use client";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { ClipboardList, FileText, LayoutDashboard, ListOrdered, ListVideo, RadioTower, Send } from "lucide-react";
+import { ClipboardList, Hash, House, ListVideo, Megaphone, RadioTower, Send, UsersRound, type LucideIcon } from "lucide-react";
 
-const GROUPS = [
-  {
-    label: "This week",
-    items: [
-      { href: "/", label: "Overview", icon: LayoutDashboard },
-      { href: "/rankings", label: "Rankings", icon: ListOrdered },
-      { href: "/briefs", label: "Briefs", icon: FileText },
-      { href: "/pipeline", label: "Outreach", icon: Send },
-    ],
-  },
-  { label: "Data", items: [{ href: "/episodes", label: "Episodes", icon: ListVideo }] },
-  {
-    label: "Setup",
-    items: [
-      { href: "/admin/shows", label: "Shows", icon: RadioTower },
-      { href: "/admin/runs", label: "Runs", icon: ClipboardList },
-    ],
-  },
+type Item = { href: string; label: string; icon: LucideIcon; match: (path: string, tab: string | null) => boolean };
+
+const rankTab = (t: string) => (path: string, tab: string | null) => path === "/rankings" && (tab ?? "guests") === t;
+
+const GROUPS: Item[][] = [
+  [
+    { href: "/", label: "Home", icon: House, match: (p) => p === "/" },
+    { href: "/rankings?tab=guests", label: "Guests", icon: UsersRound, match: (p, t) => rankTab("guests")(p, t) || p.startsWith("/guests/") },
+    { href: "/rankings?tab=topics", label: "Topics", icon: Hash, match: (p, t) => rankTab("topics")(p, t) || p.startsWith("/topics/") },
+    { href: "/rankings?tab=sponsors", label: "Sponsors", icon: Megaphone, match: rankTab("sponsors") },
+    { href: "/pipeline", label: "Outreach", icon: Send, match: (p) => p === "/pipeline" },
+  ],
+  [
+    { href: "/episodes", label: "Episodes", icon: ListVideo, match: (p) => p.startsWith("/episodes") },
+    { href: "/admin/shows", label: "Channels", icon: RadioTower, match: (p) => p.startsWith("/admin/shows") },
+    { href: "/admin/runs", label: "Runs", icon: ClipboardList, match: (p) => p.startsWith("/admin/runs") },
+  ],
 ];
 
-function isActive(path: string, href: string) {
-  return href === "/" ? path === "/" : path === href || path.startsWith(href + "/");
-}
-
-function Items({ variant, active }: { variant: "side" | "top"; active: string | null }) {
+function Items({ variant, path, tab }: { variant: "side" | "top"; path: string | null; tab: string | null }) {
+  const on = (i: Item) => path !== null && i.match(path, tab);
   if (variant === "top") {
+    // YouTube's mobile chip row.
     return (
       <>
-        {GROUPS.flatMap((g) => g.items).map(({ href, label, icon: Icon }) => {
-          const on = active !== null && isActive(active, href);
-          return (
-            <Link key={href} href={href} aria-current={on ? "page" : undefined}
-              className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-                on ? "bg-ink text-bg" : "text-ink-2 hover:bg-surface-2"}`}>
-              <Icon className="size-4" strokeWidth={1.75} />{label}
-            </Link>
-          );
-        })}
+        {GROUPS.flat().map((i) => (
+          <Link key={i.href} href={i.href} aria-current={on(i) ? "page" : undefined}
+            className={`inline-flex shrink-0 items-center rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              on(i) ? "bg-ink text-bg" : "bg-surface-2 text-ink hover:bg-line-strong"}`}>
+            {i.label}
+          </Link>
+        ))}
       </>
     );
   }
   return (
     <>
-      {GROUPS.map((g) => (
-        <div key={g.label} className="mt-6 first:mt-0">
-          <p className="px-3 pb-1.5 text-xs font-medium text-ink-3">{g.label}</p>
-          <ul className="space-y-0.5">
-            {g.items.map(({ href, label, icon: Icon }) => {
-              const on = active !== null && isActive(active, href);
-              return (
-                <li key={href}>
-                  <Link href={href} aria-current={on ? "page" : undefined}
-                    className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                      on ? "bg-surface text-ink shadow-[0_1px_2px_rgb(16_24_40/0.08)]" : "text-ink-2 hover:bg-surface/70 hover:text-ink"}`}>
-                    <Icon className={`size-4 ${on ? "text-accent" : ""}`} strokeWidth={1.75} />
-                    {label}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+      {GROUPS.map((g, gi) => (
+        <ul key={gi} className={gi ? "mt-2 space-y-0.5 border-t border-line pt-2 2xl:mt-3 2xl:pt-3" : "space-y-0.5"}>
+          {g.map((i) => {
+            const active = on(i);
+            const Icon = i.icon;
+            return (
+              <li key={i.href}>
+                <Link href={i.href} aria-current={active ? "page" : undefined}
+                  className={`flex flex-col items-center gap-1 rounded-lg px-1 py-3.5 text-[0.65rem] transition-colors 2xl:h-10 2xl:flex-row 2xl:gap-4 2xl:px-3 2xl:py-0 2xl:text-sm ${
+                    active ? "bg-accent-soft font-medium text-accent-soft-ink" : "text-ink hover:bg-surface-2"}`}>
+                  {/* YouTube's mini guide below 1536px: icon over a small label; full rows above. */}
+                  <Icon className={`size-5 shrink-0 ${active ? "text-accent" : "text-ink-2"}`} strokeWidth={active ? 2 : 1.6} />
+                  <span className="max-w-full truncate">{i.label}</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       ))}
     </>
   );
 }
 
 function Active({ variant }: { variant: "side" | "top" }) {
-  return <Items variant={variant} active={usePathname()} />;
+  return <Items variant={variant} path={usePathname()} tab={useSearchParams().get("tab")} />;
 }
 
 export function Nav({ variant }: { variant: "side" | "top" }) {
   return (
-    <Suspense fallback={<Items variant={variant} active={null} />}>
+    <Suspense fallback={<Items variant={variant} path={null} tab={null} />}>
       <Active variant={variant} />
     </Suspense>
   );

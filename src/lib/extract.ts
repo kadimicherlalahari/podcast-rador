@@ -37,6 +37,9 @@ Rules:
   - retailers or marketplaces that merely host another brand's link (the sponsor is the brand, not Flipkart/Amazon);
   - gear/equipment lists ("Camera -", "Mic -") and book or reading recommendations, even with affiliate links.
 - evidence: copy a short EXACT substring (3-150 characters) from the input text that supports the item, character for character. Do not paraphrase, translate, or fix typos. If you cannot quote it, leave the item out.
+- business_related: true when the episode is mainly about startups, business, entrepreneurship, investing, markets, the economy,
+  careers, marketing, technology companies, or the people building them. false for entertainment, spirituality, history, fitness,
+  relationships, celebrity gossip and similar, even when the guest is famous. business_reason: one short sentence.
 - If the description is empty or uninformative, rely on the title only. Returning empty lists is fine.`;
 
 function schema(slugs: string[]) {
@@ -57,8 +60,10 @@ function schema(slugs: string[]) {
           required: ["name", "mention_type", "evidence"],
         },
       },
+      business_related: { type: "boolean" },
+      business_reason: str,
     },
-    required: ["guests", "topics", "brands"],
+    required: ["guests", "topics", "brands", "business_related", "business_reason"],
   };
 }
 
@@ -116,9 +121,10 @@ function writeStatements(ep: Pending, v: Verified, raw: RawExtraction, calls: nu
     s.push({ sql: "insert or ignore into episode_topics (episode_id, topic_id) select ?, id from topics where slug = ?", args: [ep.id, t] });
   }
   s.push({
-    sql: `update episodes set status = 'extracted', extraction_error = null,
+    sql: `update episodes set status = 'extracted', extraction_error = null, business_related = ?, business_reason = ?,
             extracted_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), extraction_stats = ? where id = ?`,
-    args: [JSON.stringify({ model: geminiModel(), calls, dropped: v.dropped, raw }), ep.id],
+    args: [raw.business_related === false ? 0 : 1, (raw.business_reason ?? "").slice(0, 300) || null,
+      JSON.stringify({ model: geminiModel(), calls, dropped: v.dropped, raw }), ep.id],
   });
   return s;
 }

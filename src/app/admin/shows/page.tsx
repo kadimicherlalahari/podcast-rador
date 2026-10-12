@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { connection } from "next/server";
 import { AlertTriangle, ChevronRight, Pause, Play, Plus, RadioTower, Search, X } from "lucide-react";
 import { db } from "@/lib/db";
 import { searchChannels, type YtCandidate } from "@/lib/youtube";
@@ -49,6 +50,8 @@ export default function ShowsPage({ searchParams }: { searchParams: SP }) {
 }
 
 async function Shows({ searchParams }: { searchParams: SP }) {
+  // Dates are formatted relative to now, so render at request time rather than prerendering.
+  await connection();
   const { resolve, go } = await searchParams;
   const { data, error } = await safe(() => db().execute("select * from shows order by active desc, created_at, name"));
   const shows: Show[] = (data?.rows ?? []).map((r) => ({
@@ -146,7 +149,7 @@ async function Shows({ searchParams }: { searchParams: SP }) {
                       ] as [string, unknown][]).map(([k, v]) => (
                         <div key={k} className="contents">
                           <dt className="text-ink-3">{k}</dt>
-                          <dd className="break-all font-mono text-[0.8rem] text-ink-2">{v ? String(v) : "–"}</dd>
+                          <dd className="break-all font-mono text-xs text-ink-2">{v ? String(v) : "–"}</dd>
                         </div>
                       ))}
                     </dl>
@@ -163,7 +166,7 @@ async function Shows({ searchParams }: { searchParams: SP }) {
 
 function SourceChip({ label, ok }: { label: string; ok: boolean }) {
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium ${
+    <span className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-0.5 text-xs font-medium ${
       ok ? "border-line bg-surface text-ink-2" : "border-dashed border-line-strong text-ink-3"}`}>
       <span className={`size-1.5 rounded-full ${ok ? "bg-good" : "bg-line-strong"}`} />
       {label}<span className="sr-only">{ok ? " connected" : " not connected"}</span>
@@ -235,7 +238,7 @@ async function ResolvePanel({ show, fetchNow }: { show: Show; fetchNow: boolean 
   return (
     <div className="space-y-6">
       <section className="space-y-2">
-        <h3 className="text-sm font-semibold text-ink">YouTube channels</h3>
+        <h3 className="text-sm font-bold text-ink">YouTube channels</h3>
         {err(yt.error)}{none(yt.data)}
         {yt.data?.map((c: YtCandidate) => (
           <Candidate key={c.channelId} title={<>{c.title} <span className="font-normal text-ink-3">{c.handle}</span></>}
@@ -251,11 +254,11 @@ async function ResolvePanel({ show, fetchNow }: { show: Show; fetchNow: boolean 
       </section>
 
       <section className="space-y-2">
-        <h3 className="text-sm font-semibold text-ink">Podcast RSS feeds</h3>
+        <h3 className="text-sm font-bold text-ink">Podcast RSS feeds</h3>
         {err(pi.error)}{none(pi.data)}
         {pi.data?.map((f: PiFeed) => (
           <Candidate key={f.id} title={<>{f.title} <span className="font-normal text-ink-3">by {f.author}</span></>}
-            meta={<>{f.episodeCount} episodes · {f.language} · updated {f.lastUpdateTime ? fmtDate(new Date(f.lastUpdateTime * 1000).toISOString()) : "unknown"} · <a className="text-accent hover:underline" href={f.url} target="_blank" rel="noreferrer">{f.url}</a></>}>
+            meta={<>{f.episodeCount} episodes · {f.language} · updated {f.lastUpdateTime ? fmtDate(new Date(f.lastUpdateTime * 1000).toISOString()) : "unknown"} · <a className="text-info hover:underline" href={f.url} target="_blank" rel="noreferrer">{f.url}</a></>}>
             <form action={confirmRss}>
               <input type="hidden" name="id" value={show.id} />
               <input type="hidden" name="feedId" value={f.id} />
@@ -267,7 +270,7 @@ async function ResolvePanel({ show, fetchNow }: { show: Show; fetchNow: boolean 
 
       {spotifyEnabled() && (
         <section className="space-y-2">
-          <h3 className="text-sm font-semibold text-ink">Spotify shows</h3>
+          <h3 className="text-sm font-bold text-ink">Spotify shows</h3>
           {err(sp.error)}{none(sp.data)}
           {sp.data?.map((c: SpotifyCandidate) => (
             <Candidate key={c.id} title={<>{c.name} <span className="font-normal text-ink-3">by {c.publisher}</span></>}

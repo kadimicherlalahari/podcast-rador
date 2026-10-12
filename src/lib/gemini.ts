@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, MediaResolution, type GenerateContentResponse } from "@google/genai";
 
 let client: GoogleGenAI | null = null;
 
@@ -26,31 +26,18 @@ export class RateLimitError extends Error {}
 const RETRYABLE = new Set([429, 500, 503, 504]);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+type RetryOpts = { onAttempt?: () => void; retries?: number; onRetry?: (status: number, waitMs: number) => void };
+
 /**
- * One JSON-mode generateContent call with exponential backoff on 429/5xx.
+ * Runs one Gemini request with exponential backoff on 429/5xx.
  * `onAttempt` is called for every HTTP request so callers can enforce a per-run call cap.
  */
-export async function generateJson<T>(opts: {
-  system: string; prompt: string; schema: object; onAttempt?: () => void; retries?: number;
-  onRetry?: (status: number, waitMs: number) => void;
-}): Promise<T> {
+async function withRetry<T>(call: () => Promise<T>, opts: RetryOpts): Promise<T> {
   const retries = opts.retries ?? 5;
   for (let attempt = 0; ; attempt++) {
     opts.onAttempt?.();
     try {
-      const res = await ai().models.generateContent({
-        model: geminiModel(),
-        contents: opts.prompt,
-        config: {
-          systemInstruction: opts.system,
-          responseMimeType: "application/json",
-          responseJsonSchema: opts.schema,
-          temperature: 0,
-        },
-      });
-      const text = res.text;
-      if (!text) throw new Error(`Empty response (finish reason: ${res.candidates?.[0]?.finishReason ?? "unknown"})`);
-      return JSON.parse(text) as T;
+      return await call();
     } catch (e) {
       const err = e as { status?: number; name?: string };
       // Timeouts surface as AbortError/TimeoutError without a status; treat them like a 504.
@@ -70,4 +57,76 @@ export async function generateJson<T>(opts: {
       await sleep(wait);
     }
   }
+}
+
+function parseJson<T>(res: GenerateContentResponse): T {
+  const text = res.text;
+  if (!text) throw new Error(`Empty response (finish reason: ${res.candidates?.[0]?.finishReason ?? "unknown"})`);
+  // Grounded answers can arrive wrapped in a ```json fence.
+  const body = /```(?:json)?\s*([\s\S]*?)```/.exec(text)?.[1] ?? text;
+  return JSON.parse(body) as T;
+}
+
+/** One JSON-mode generateContent call over plain text. */
+export async function generateJson<T>(opts: { system: string; prompt: string; schema: object } & RetryOpts): Promise<T> {
+  return withRetry(async () => parseJson<T>(await ai().models.generateContent({
+    model: geminiModel(),
+    contents: opts.prompt,
+    config: {
+      systemInstruction: opts.system,
+      responseMimeType: "application/json",
+      responseJsonSchema: opts.schema,
+      temperature: 0,
+    },
+  })), opts);
+}
+
+export type WebSource = { title: string; uri: string };
+
+/** JSON answer grounded with Google Search. Returns the pages Gemini actually used, so the UI can cite them. */
+export async function generateGrounded<T>(opts: { system: string; prompt: string; schema: object } & RetryOpts): Promise<{ data: T; sources: WebSource[] }> {
+  return withRetry(async () => {
+    const res = await ai().models.generateContent({
+      model: geminiModel(),
+      contents: opts.prompt,
+      config: {
+        systemInstruction: opts.system,
+        tools: [{ googleSearch: {} }],
+        responseMimeType: "application/json",
+        responseJsonSchema: opts.schema,
+        temperature: 0.2,
+      },
+    });
+    const seen = new Set<string>();
+    const sources = (res.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [])
+      .map((c) => ({ title: c.web?.title ?? c.web?.domain ?? "", uri: c.web?.uri ?? "" }))
+      .filter((s) => s.uri && !seen.has(s.uri) && seen.add(s.uri));
+    return { data: parseJson<T>(res), sources };
+  }, opts);
+}
+
+/**
+ * Gemini watches a public YouTube video (official fileData support, no download or scraping).
+ * Low media resolution and an end offset keep a 1-2 hour episode inside free-tier token limits.
+ */
+export async function generateFromVideo<T>(opts: {
+  videoId: string; endOffsetSec: number; system: string; prompt: string; schema: object;
+} & RetryOpts): Promise<T> {
+  return withRetry(async () => parseJson<T>(await ai().models.generateContent({
+    model: geminiModel(),
+    contents: [{
+      role: "user",
+      parts: [
+        { fileData: { fileUri: `https://www.youtube.com/watch?v=${opts.videoId}`, mimeType: "video/*" }, videoMetadata: { endOffset: `${opts.endOffsetSec}s` } },
+        { text: opts.prompt },
+      ],
+    }],
+    config: {
+      systemInstruction: opts.system,
+      responseMimeType: "application/json",
+      responseJsonSchema: opts.schema,
+      mediaResolution: MediaResolution.MEDIA_RESOLUTION_LOW,
+      temperature: 0,
+    },
+  })), { ...opts, retries: opts.retries ?? 3 });
 }

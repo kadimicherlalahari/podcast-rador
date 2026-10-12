@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { connection } from "next/server";
 import { ListVideo, Search } from "lucide-react";
 import { db } from "@/lib/db";
 import { AutoSelect } from "@/components/client";
@@ -38,6 +39,8 @@ export default function EpisodesPage({ searchParams }: { searchParams: SP }) {
 }
 
 async function Episodes({ searchParams }: { searchParams: SP }) {
+  // Dates are formatted relative to now, so render at request time rather than prerendering.
+  await connection();
   const { show = "", kind = "full", q = "" } = await searchParams;
 
   const where: string[] = [];
