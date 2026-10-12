@@ -56,7 +56,7 @@ export async function weeklyRefresh(budgetMs = 270_000): Promise<StageResult[]> 
 export async function weeklyBrief(opts: { force?: boolean } = {}): Promise<StageResult & { skipped?: boolean }> {
   if (!opts.force) {
     const recent = (await db().execute(
-      "select generated_at from briefs where emailed = 1 and generated_at >= strftime('%Y-%m-%dT%H:%M:%fZ','now','-12 hours') limit 1",
+      "select generated_at from briefs where emailed = 1 and generated_at >= strftime('%Y-%m-%dT%H:%M:%fZ','now','-12 hours') order by generated_at desc limit 1",
     )).rows[0];
     if (recent) return { stage: "brief", ok: true, skipped: true, detail: `Already emailed at ${recent.generated_at}; not sending again`, ms: 0 };
   }
