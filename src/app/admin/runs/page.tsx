@@ -1,12 +1,14 @@
 import { Suspense } from "react";
 import { revalidatePath } from "next/cache";
 import { connection } from "next/server";
-import { ChevronRight, ClipboardList, DownloadCloud, FileText, Lock, Sparkles } from "lucide-react";
+import { ChevronRight, ClipboardList, DownloadCloud, FileText, ListOrdered, Lock, Sparkles } from "lucide-react";
 import { db } from "@/lib/db";
 import { ingestAll } from "@/lib/ingest";
 import { extractBatch, requeueFailed } from "@/lib/extract";
+import { resolveEntities } from "@/lib/resolve";
+import Link from "next/link";
 import { SubmitButton } from "@/components/client";
-import { EmptyState, PageHeader, PageSkeleton, Panel, Pill, ShowName, ago, fmtDateTime, n } from "@/components/ui";
+import { EmptyState, btn, PageHeader, PageSkeleton, Panel, Pill, ShowName, ago, fmtDateTime, n } from "@/components/ui";
 
 export const maxDuration = 300;
 export const metadata = { title: "Runs" };
@@ -22,6 +24,14 @@ async function runExtract() {
   "use server";
   await extractBatch({ deadlineMs: 240_000 });
   revalidatePath("/admin/runs");
+  revalidatePath("/");
+}
+
+async function runScore() {
+  "use server";
+  await resolveEntities({ deadlineMs: 240_000 });
+  revalidatePath("/admin/runs");
+  revalidatePath("/rankings");
   revalidatePath("/");
 }
 
@@ -56,6 +66,15 @@ export default function RunsPage() {
               <Suspense>
                 <RetryFailed />
               </Suspense>
+            </div>
+          </Stage>
+          <Stage icon={ListOrdered} title="Score and rank"
+            body="Merges duplicate guest and brand names (Gemini checks the borderline ones), then ranks media rounds, topic momentum and sponsors with plain SQL.">
+            <div className="flex flex-wrap gap-2">
+              <form action={runScore}>
+                <SubmitButton pending="Scoring… keep this tab open">Run now</SubmitButton>
+              </form>
+              <Link href="/rankings" className={btn.secondary}>View rankings</Link>
             </div>
           </Stage>
           <Stage icon={FileText} title="Write the brief" body="Scores the week and writes Monday's brief." locked="Phase 5" />

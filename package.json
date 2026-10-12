@@ -15,7 +15,8 @@
     "backfill": "tsx scripts/backfill.ts",
     "extract": "tsx scripts/backfill.ts --extract-only",
     "report:ingest": "tsx scripts/report-ingest.ts",
-    "report:extract": "tsx scripts/report-extract.ts"
+    "report:extract": "tsx scripts/report-extract.ts",
+    "report:score": "tsx scripts/report-score.ts"
   },
   "dependencies": {
     "@google/genai": "^2.28.0",

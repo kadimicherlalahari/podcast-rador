@@ -2,13 +2,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense } from "react";
-import { ClipboardList, FileText, LayoutDashboard, ListVideo, RadioTower, Send } from "lucide-react";
+import { ClipboardList, FileText, LayoutDashboard, ListOrdered, ListVideo, RadioTower, Send } from "lucide-react";
 
 const GROUPS = [
   {
     label: "This week",
     items: [
       { href: "/", label: "Overview", icon: LayoutDashboard },
+      { href: "/rankings", label: "Rankings", icon: ListOrdered },
       { href: "/briefs", label: "Briefs", icon: FileText },
       { href: "/pipeline", label: "Outreach", icon: Send },
     ],

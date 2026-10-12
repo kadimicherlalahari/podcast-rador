@@ -2,7 +2,9 @@ import type { InStatement } from "@libsql/client";
 import { db } from "./db-core";
 import { verifyExtraction, type Dropped, type RawExtraction, type Verified } from "./evidence";
 import { generateJson, geminiModel, RateLimitError } from "./gemini";
+import { loadAliases } from "./resolve";
 
+type Aliases = Awaited<ReturnType<typeof loadAliases>>;
 type Topic = { slug: string; label: string };
 type Pending = { id: string; title: string; description: string; showName: string; hostNames: string[] };
 export type ExtractSummary = {
@@ -80,14 +82,16 @@ export async function loadExtractCfg() {
   return { batchSize: m.extract_batch_size ?? 15, maxCalls: m.gemini_max_calls_per_run ?? 40 };
 }
 
-function writeStatements(ep: Pending, v: Verified, raw: RawExtraction, calls: number): InStatement[] {
+function writeStatements(ep: Pending, v: Verified, raw: RawExtraction, calls: number, aliases: Aliases): InStatement[] {
   const s: InStatement[] = [
     // Re-extraction replaces earlier results for this episode; entities themselves are kept.
     { sql: "delete from appearances where episode_id = ?", args: [ep.id] },
     { sql: "delete from brand_mentions where episode_id = ?", args: [ep.id] },
     { sql: "delete from episode_topics where episode_id = ?", args: [ep.id] },
   ];
-  for (const g of v.guests) {
+  for (const g0 of v.guests) {
+    // A name merged away by entity resolution attaches to the entity it was merged into.
+    const g = { ...g0, key: aliases.guest.get(g0.key) ?? g0.key };
     s.push({
       sql: `insert into guests (canonical_name, normalized_key, company, role) values (?, ?, ?, ?)
             on conflict(normalized_key) do update set company = coalesce(guests.company, excluded.company),
@@ -99,7 +103,8 @@ function writeStatements(ep: Pending, v: Verified, raw: RawExtraction, calls: nu
       args: [ep.id, g.evidence, g.key],
     });
   }
-  for (const b of v.brands) {
+  for (const b0 of v.brands) {
+    const b = { ...b0, key: aliases.brand.get(b0.key) ?? b0.key };
     s.push({ sql: "insert or ignore into brands (canonical_name, normalized_key) values (?, ?)", args: [b.name, b.key] });
     s.push({
       sql: `insert or ignore into brand_mentions (episode_id, brand_id, mention_type, evidence)
@@ -135,6 +140,7 @@ export async function extractBatch(opts: {
   const topics = (await c.execute("select slug, label from topics order by slug = 'other', slug")).rows
     .map((r) => ({ slug: String(r.slug), label: String(r.label) }));
   const slugs = topics.map((t) => t.slug);
+  const aliases = await loadAliases();
   const { rows } = await c.execute({
     sql: `select e.id, e.title, e.description, s.name show_name, s.host_names from episodes e join shows s on s.id = e.show_id
           where e.status = 'pending_extraction' and e.kind = 'full' order by e.published_at desc limit ?`,
@@ -170,7 +176,7 @@ export async function extractBatch(opts: {
           onRetry: (status, ms) => opts.log?.(`  … Gemini ${status}, retrying in ${Math.round(ms / 1000)}s`),
         });
         const v = verifyExtraction(raw, sourceText(ep), ep.hostNames, slugs, ep.showName);
-        await c.batch(writeStatements(ep, v, raw, calls), "write");
+        await c.batch(writeStatements(ep, v, raw, calls, aliases), "write");
         sum.processed++;
         sum.extracted++;
         sum.kept.guests += v.guests.length;

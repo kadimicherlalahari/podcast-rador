@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { FileText, Megaphone, Send, TrendingUp, UserRoundSearch } from "lucide-react";
 import { EmptyState, PageHeader, Panel, Section, TextLink } from "@/components/ui";
 
@@ -11,8 +12,6 @@ const PARTS = [
 ];
 
 const STEPS = [
-  ["Extraction", "Gemini reads each full episode's description and pulls out guests, topics and sponsors, with quoted evidence."],
-  ["Scoring", "Plain SQL ranks guests, topics and brands. The AI never computes numbers."],
   ["Brief", "Every Monday a brief is saved here and emailed. Gemini writes only the summary text."],
 ];
 
@@ -23,7 +22,7 @@ export default function BriefsPage() {
 
       <div className="mt-8">
         <EmptyState icon={FileText} title="No briefs yet" action={<TextLink href="/episodes">See collected episodes</TextLink>}>
-          Episodes are being collected. The first brief can be written once extraction and scoring are in place.
+          Extraction and scoring are running; see the live <Link href="/rankings" className="underline">Rankings</Link>. Briefs arrive with the next phase.
         </EmptyState>
       </div>
 

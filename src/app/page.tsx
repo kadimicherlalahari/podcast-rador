@@ -21,7 +21,7 @@ export default function Home() {
 
 async function Overview() {
   await connection();
-  const [shows, weekly, totals, runs, briefs, latest] = await Promise.all([
+  const [shows, weekly, totals, runs, briefs, scored, latest] = await Promise.all([
     db().execute({
       sql: `select s.id, s.name, s.active, s.host_names,
               coalesce(sum(e.kind = 'full' and e.published_at >= ?), 0) full_30d,
@@ -41,6 +41,7 @@ async function Overview() {
                   from episodes`),
     db().execute("select started_at, finished_at, errors from ingest_runs order by started_at desc limit 1"),
     db().execute("select id, week_start, generated_at from briefs order by generated_at desc limit 1"),
+    db().execute("select finished_at, merged from resolve_runs order by started_at desc limit 1"),
     db().execute(`select e.id, e.title, e.published_at, e.duration_seconds, s.name show_name
                   from episodes e join shows s on s.id = e.show_id
                   where e.kind = 'full' order by e.published_at desc limit 6`),
@@ -68,9 +69,10 @@ async function Overview() {
       are collected and waiting for AI extraction, which is the next stage.</>
   ) : (
     <>No brief yet. <b className="font-medium text-ink">{n(extracted)} episodes</b> are extracted
-      {pending ? <>, {n(pending)} still waiting</> : null}. Scoring and ranking is the next stage.</>
+      {pending ? <>, {n(pending)} still waiting</> : null}. <Link href="/rankings" className="font-medium text-ink underline">Rankings</Link> are live; the Monday brief is the next stage.</>
   );
-  const nextStage = brief ? null : extracted ? "Needs scoring" : "Needs extraction";
+  const nextStage = brief ? null : extracted ? "Needs brief" : "Needs extraction";
+  const lastScore = scored.rows[0];
 
   type Step = { label: string; detail: string; state: "done" | "waiting" | "todo" };
   const steps: Step[] = [
@@ -84,7 +86,11 @@ async function Overview() {
       detail: extracted ? `${n(extracted)} done · ${n(pending)} waiting` : `${n(pending)} episodes waiting`,
       state: pending ? "waiting" : extracted ? "done" : "todo",
     },
-    { label: "Score and rank", detail: "Media rounds, topic momentum, sponsors", state: "todo" },
+    {
+      label: "Score and rank",
+      detail: lastScore ? `Names merged ${ago(String(lastScore.finished_at))} · live` : "Media rounds, topic momentum, sponsors",
+      state: lastScore ? "done" : extracted ? "waiting" : "todo",
+    },
     { label: "Write the brief", detail: "Every Monday morning", state: brief ? "done" : "todo" },
     { label: "Draft outreach", detail: "Top 5 guests and brands", state: "todo" },
   ];
