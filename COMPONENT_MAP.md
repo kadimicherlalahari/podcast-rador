@@ -95,7 +95,16 @@ flowchart LR
 | 6. Trend check | `lib/trends.ts` → `checkTrend` | Topics tab search box or chips | YouTube, `episodes` | `insights` (topic / trend, 6 h cache) | YouTube search ×2 (≈200 units); Tavily news; Gemini |
 | 7. Brief + email | `lib/brief.ts` → `buildBrief`, `emailBrief` | Overview button · Runs page · `npm run brief` · `/api/jobs/brief` | rankings + `insights` | `briefs`, `pipeline` (drafts) | Gemini, 1 call; Resend, 1 email |
 
-Job routes need `Authorization: Bearer $CRON_SECRET` (`lib/auth.ts`). Long-running work stops at a deadline and a per-run Gemini cap; the next run picks up where it stopped.
+**Monday schedule** (`vercel.json`, times in UTC; `lib/weekly.ts`):
+
+| When (IST) | Cron (UTC) | Route | Does |
+|------------|------------|-------|------|
+| Mon 07:00 | `30 1 * * 1` | `/api/jobs/weekly-refresh` | Collect → extract → merge names → stats and research, time-boxed to 270s |
+| Mon 08:00 | `30 2 * * 1` | `/api/jobs/brief` | Write the brief from that research and email it. Skips if one was already emailed in the last 12h (`?force=1` overrides) |
+
+Run the same thing by hand with `npm run weekly` (`--refresh-only`, `--brief-only`, `--force`).
+
+Job routes need `Authorization: Bearer $CRON_SECRET` (`lib/auth.ts`); Vercel Cron sends it automatically when `CRON_SECRET` is set in the project. Long-running work stops at a deadline and a per-run Gemini cap; the next run picks up where it stopped.
 
 ---
 

@@ -19,7 +19,8 @@
     "report:score": "tsx scripts/report-score.ts",
     "insights": "tsx scripts/insights.ts",
     "analyse": "tsx scripts/analyse-videos.ts",
-    "brief": "tsx scripts/brief.ts"
+    "brief": "tsx scripts/brief.ts",
+    "weekly": "tsx scripts/weekly.ts"
   },
   "dependencies": {
     "@google/genai": "^2.28.0",
